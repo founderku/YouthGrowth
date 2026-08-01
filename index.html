@@ -380,7 +380,8 @@
   }
 
   async function apiListAll(){
-    const res = await fetch(API_URL + '?action=list');
+    // tambahin penanda waktu + cache:'no-store' biar browser nggak pernah pakai jawaban lama
+    const res = await fetch(API_URL + '?action=list&_=' + Date.now(), { cache: 'no-store' });
     if(!res.ok) throw new Error('Gagal menghubungi server (status '+res.status+')');
     const data = await res.json();
     if(!data.ok) throw new Error(data.error || 'Server menolak permintaan');
