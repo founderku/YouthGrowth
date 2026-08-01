@@ -305,7 +305,7 @@
 <script>
 (function(){
   const state = { energy:null, blocker:null };
-  const HEAD_PIN = '2026'; // Head: ganti kode di sini kalau mau (juga jadi kode reset), lalu simpan ulang filenya
+  const HEAD_PIN = '676767'; // Head: ganti kode di sini kalau mau (juga jadi kode reset), lalu simpan ulang filenya
 
   // WAJIB DIISI: tempel URL Apps Script kamu di sini setelah deploy (lihat instruksi dari Claude)
   const API_URL = 'https://script.google.com/macros/s/AKfycbzFK4ztRIHFq3SqCxztJGca3EVC0XpTr1CEkJ5yUl8Gx0uIzy3MrGge8PDvnNOsLJYp/exec';
@@ -379,9 +379,20 @@
     return data;
   }
 
+  async function apiMyStats(name){
+    // Progress pribadi: nggak butuh PIN, tapi server cuma balikin data milik nama ini sendiri
+    const url = API_URL + '?action=mystats&name=' + encodeURIComponent(name) + '&_=' + Date.now();
+    const res = await fetch(url, { cache: 'no-store' });
+    if(!res.ok) throw new Error('Gagal menghubungi server (status '+res.status+')');
+    const data = await res.json();
+    if(!data.ok) throw new Error(data.error || 'Server menolak permintaan');
+    return data.rows || [];
+  }
+
   async function apiListAll(){
-    // tambahin penanda waktu + cache:'no-store' biar browser nggak pernah pakai jawaban lama
-    const res = await fetch(API_URL + '?action=list&_=' + Date.now(), { cache: 'no-store' });
+    // Dashboard Head: wajib kirim PIN, kalau salah/kosong server bakal nolak
+    const url = API_URL + '?action=list&pin=' + encodeURIComponent(HEAD_PIN) + '&_=' + Date.now();
+    const res = await fetch(url, { cache: 'no-store' });
     if(!res.ok) throw new Error('Gagal menghubungi server (status '+res.status+')');
     const data = await res.json();
     if(!data.ok) throw new Error(data.error || 'Server menolak permintaan');
@@ -459,17 +470,15 @@
 
   async function refreshMyStats(name){
     if(!name) return;
-    let allRows;
+    let logs;
     try{
-      allRows = await apiListAll();
+      logs = await apiMyStats(name);
+      console.log('DEBUG logs milik saya:', logs);
     }catch(e){
       console.error(e);
       return;
     }
-    const nameLower = name.trim().toLowerCase();
-    const logs = allRows
-      .filter(r => String(r.Nama||'').trim().toLowerCase() === nameLower)
-      .sort((a,b)=> a.Tanggal < b.Tanggal ? 1 : -1);
+    logs = logs.sort((a,b)=> a.Tanggal < b.Tanggal ? 1 : -1);
 
     document.getElementById('statTotal').textContent = logs.length;
     document.getElementById('statXp').textContent = logs.length * 10;
@@ -510,6 +519,7 @@
     teamList.innerHTML = '<div class="empty">Memuat...</div>';
     try{
       const rows = await apiListAll();
+      console.log('DEBUG rows dashboard:', rows);
       if(rows.length === 0){
         teamList.innerHTML = '<div class="empty">Belum ada yang check-in.</div>';
         return;
@@ -524,6 +534,10 @@
         }
       }
       const members = Object.values(latestByName).sort((a,b)=> String(a.Nama).localeCompare(String(b.Nama)));
+      if(members.length === 0){
+        teamList.innerHTML = '<div class="empty">Ada '+rows.length+' data masuk, tapi kolom Nama-nya nggak kebaca. Cek Console (F12) buat detail data mentahnya.</div>';
+        return;
+      }
       teamList.innerHTML = members.map(m=>{
         const st = statusFor(m);
         const dateLabel = m.Tanggal ? new Date(m.Tanggal+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric', month:'short'}) : '-';
