@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Pulse Check-in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg-deep:#070b14;
+    --bg-panel:#101827;
+    --bg-panel-2:#0c1220;
+    --panel-border:#1e2b41;
+    --accent-cyan:#38f2c0;
+    --accent-blue:#4d8dff;
+    --accent-amber:#ffb84d;
+    --accent-red:#ff5c72;
+    --text-primary:#eef3fb;
+    --text-muted:#8ea0bd;
+    --text-faint:#5a6b87;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:radial-gradient(1200px 600px at 15% -10%, #10203a 0%, var(--bg-deep) 55%);
+    color:var(--text-primary);
+    font-family:'Inter',sans-serif;
+    padding:32px 20px 60px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+
+  /* header */
+  .header{margin-bottom:28px;}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;
+    color:var(--accent-cyan);text-transform:uppercase;
+    border:1px solid rgba(56,242,192,.35);border-radius:999px;
+    padding:5px 12px;background:rgba(56,242,192,.06);
+    margin-bottom:14px;
+  }
+  h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:clamp(28px,4vw,42px);
+    line-height:1.05;
+    margin:0;
+  }
+  h1 .grad{
+    background:linear-gradient(90deg,var(--accent-cyan),var(--accent-blue));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .subhead{color:var(--text-muted);margin-top:10px;font-size:14.5px;max-width:520px;}
+
+  /* pulse line signature */
+  .pulseline{width:100%;height:34px;margin-top:22px;opacity:.85;}
+  .pulseline path{
+    fill:none;stroke:url(#pulseGrad);stroke-width:2;
+    stroke-dasharray:600;stroke-dashoffset:600;
+    animation:draw 3.2s ease-in-out infinite;
+  }
+  @keyframes draw{
+    0%{stroke-dashoffset:600;}
+    45%{stroke-dashoffset:0;}
+    100%{stroke-dashoffset:-600;}
+  }
+
+  /* layout */
+  .grid{display:grid;grid-template-columns:1.15fr .85fr;gap:20px;align-items:start;}
+  @media (max-width:880px){.grid{grid-template-columns:1fr;}}
+
+  .panel{
+    background:linear-gradient(180deg,var(--bg-panel),var(--bg-panel-2));
+    border:1px solid var(--panel-border);
+    border-radius:16px;
+    padding:22px 22px 24px;
+  }
+  .panel + .panel{margin-top:20px;}
+  .panel-title{
+    display:flex;align-items:center;gap:8px;
+    font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;
+    margin-bottom:4px;
+  }
+  .panel-sub{color:var(--text-faint);font-size:12.5px;margin-bottom:18px;}
+
+  /* form */
+  label.q{display:block;font-size:13.5px;font-weight:600;margin:18px 0 8px;color:var(--text-primary);}
+  label.q .num{color:var(--accent-cyan);font-family:'IBM Plex Mono',monospace;margin-right:6px;}
+  .textrow{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media (max-width:520px){.textrow{grid-template-columns:1fr;}}
+  input[type=text]{
+    width:100%;background:#0a1120;border:1px solid var(--panel-border);
+    color:var(--text-primary);border-radius:10px;padding:11px 13px;
+    font-family:'Inter',sans-serif;font-size:14px;outline:none;
+    transition:border-color .15s;
+  }
+  input[type=text]:focus{border-color:var(--accent-cyan);}
+  input[type=text]::placeholder{color:var(--text-faint);}
+
+  .opts{display:flex;flex-wrap:wrap;gap:8px;}
+  .opt{
+    border:1px solid var(--panel-border);background:#0a1120;
+    color:var(--text-muted);font-size:13px;font-weight:500;
+    padding:8px 14px;border-radius:9px;cursor:pointer;user-select:none;
+    transition:all .12s;
+  }
+  .opt:hover{border-color:#33445f;}
+  .opt.sel{
+    background:rgba(56,242,192,.12);
+    border-color:var(--accent-cyan);
+    color:var(--accent-cyan);
+  }
+  .opt.sel[data-tone="amber"]{background:rgba(255,184,77,.12);border-color:var(--accent-amber);color:var(--accent-amber);}
+  .opt.sel[data-tone="red"]{background:rgba(255,92,114,.12);border-color:var(--accent-red);color:var(--accent-red);}
+
+  .submitbtn{
+    margin-top:22px;width:100%;border:none;border-radius:11px;
+    padding:14px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14.5px;
+    letter-spacing:.02em;cursor:pointer;color:#04120e;
+    background:linear-gradient(90deg,var(--accent-cyan),var(--accent-blue));
+    transition:transform .1s, opacity .15s;
+  }
+  .submitbtn:hover{transform:translateY(-1px);}
+  .submitbtn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+  .formmsg{margin-top:10px;font-size:13px;min-height:18px;}
+  .formmsg.ok{color:var(--accent-cyan);}
+  .formmsg.err{color:var(--accent-red);}
+
+  /* stats */
+  .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  @media (max-width:420px){.statgrid{grid-template-columns:1fr;}}
+  .stat{
+    background:#0a1120;border:1px solid var(--panel-border);border-radius:12px;
+    padding:14px 12px;text-align:center;
+  }
+  .stat .val{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:19px;color:var(--accent-cyan);}
+  .stat .lbl{font-size:11px;color:var(--text-faint);margin-top:4px;letter-spacing:.03em;text-transform:uppercase;}
+  .badge-row{
+    margin-top:12px;display:flex;align-items:center;gap:10px;
+    background:#0a1120;border:1px solid var(--panel-border);border-radius:12px;padding:12px 14px;
+  }
+  .badge-row.locked .badge-icon{opacity:.3;}
+  .badge-icon{font-size:20px;}
+  .badge-text b{display:block;font-size:13px;}
+  .badge-text span{font-size:11.5px;color:var(--text-faint);}
+
+  /* dashboard */
+  .member{
+    display:flex;align-items:center;gap:11px;
+    padding:10px 4px;border-bottom:1px solid var(--panel-border);
+  }
+  .member:last-child{border-bottom:none;}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none;}
+  .dot.green{background:var(--accent-cyan);box-shadow:0 0 8px rgba(56,242,192,.6);}
+  .dot.amber{background:var(--accent-amber);box-shadow:0 0 8px rgba(255,184,77,.6);}
+  .dot.red{background:var(--accent-red);box-shadow:0 0 8px rgba(255,92,114,.6);}
+  .dot.grey{background:#3a4b66;}
+  .member .info{flex:1;min-width:0;}
+  .member .name{font-size:13.5px;font-weight:600;}
+  .member .meta{font-size:11.5px;color:var(--text-faint);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .member .status{font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--text-muted);flex:none;}
+  .empty{color:var(--text-faint);font-size:13px;padding:8px 4px;}
+  .refresh{
+    background:none;border:1px solid var(--panel-border);color:var(--text-muted);
+    font-size:11.5px;border-radius:8px;padding:6px 11px;cursor:pointer;
+  }
+  .refresh:hover{border-color:var(--accent-cyan);color:var(--accent-cyan);}
+  .dash-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;gap:10px;}
+  .dash-head .btnrow{display:flex;gap:8px;flex:none;}
+  .note{font-size:11px;color:var(--text-faint);margin-top:14px;line-height:1.5;}
+
+  /* tabs */
+  .tabs{display:flex;gap:8px;margin-bottom:22px;}
+  .tab-btn{
+    background:#0a1120;border:1px solid var(--panel-border);color:var(--text-muted);
+    font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px;
+    padding:10px 18px;border-radius:10px;cursor:pointer;transition:all .12s;
+  }
+  .tab-btn:hover{border-color:#33445f;}
+  .tab-btn.active{border-color:var(--accent-cyan);color:var(--accent-cyan);background:rgba(56,242,192,.08);}
+
+  /* pin gate */
+  .pin-row{display:flex;gap:10px;margin-top:8px;}
+  .pin-row input{flex:1;}
+  .pin-row .submitbtn{width:auto;margin-top:0;padding:11px 22px;white-space:nowrap;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="eyebrow">● Internship Program</div>
+    <h1>Daily Pulse <span class="grad">Check-in</span></h1>
+    <p class="subhead">Isi check-in harian singkat. Tujuannya bukan buat mantau, tapi biar tim dan pembimbing bisa baca kondisi lebih cepat sebelum masalah membesar.</p>
+    <svg class="pulseline" viewBox="0 0 600 34" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="pulseGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#38f2c0"/>
+          <stop offset="1" stop-color="#4d8dff"/>
+        </linearGradient>
+      </defs>
+      <path d="M0,17 L120,17 L145,4 L170,30 L195,17 L330,17 L355,8 L380,26 L405,17 L600,17"/>
+    </svg>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tabBtnCheckin" type="button">📋 Check-in</button>
+    <button class="tab-btn" id="tabBtnHead" type="button">🔒 Head Dashboard</button>
+  </div>
+
+  <!-- TAB: CHECK-IN (terbuka buat semua) -->
+  <div id="viewCheckin">
+    <div class="grid">
+      <!-- LEFT: FORM -->
+      <div class="panel">
+        <div class="panel-title">📋 Check-in Hari Ini</div>
+        <div class="panel-sub" id="todayLabel"></div>
+
+        <div class="textrow">
+          <div>
+            <label class="q">Nama</label>
+            <input type="text" id="fName" placeholder="Nama kamu">
+          </div>
+          <div>
+            <label class="q">Divisi</label>
+            <input type="text" id="fDivisi" placeholder="Misal: Product, Marketing">
+          </div>
+        </div>
+
+        <label class="q"><span class="num">1.</span>Gimana energi kamu hari ini?</label>
+        <div class="opts" data-group="energy">
+          <div class="opt" data-value="energized">🙂 Bertenaga</div>
+          <div class="opt" data-value="okay">😐 Baik-baik saja</div>
+          <div class="opt" data-value="tired" data-tone="amber">😴 Lelah</div>
+          <div class="opt" data-value="stuck" data-tone="amber">🥴 Mentok</div>
+        </div>
+
+        <label class="q"><span class="num">2.</span>Lagi fokus ngerjain apa?</label>
+        <input type="text" id="fFocus" placeholder="Misal: draft laporan, revisi desain">
+
+        <label class="q"><span class="num">3.</span>Ada blocker?</label>
+        <div class="opts" data-group="blocker">
+          <div class="opt" data-value="none">✅ Tidak ada</div>
+          <div class="opt" data-value="clarification" data-tone="amber">❓ Butuh klarifikasi</div>
+          <div class="opt" data-value="time" data-tone="amber">⏳ Butuh waktu</div>
+          <div class="opt" data-value="technical" data-tone="red">🔧 Kendala teknis</div>
+        </div>
+
+        <label class="q"><span class="num">4.</span>Hari ini aku akan menyelesaikan...</label>
+        <input type="text" id="fCommit" placeholder="Tulis komitmen kamu hari ini">
+
+        <button class="submitbtn" id="submitBtn">Submit Check-in</button>
+        <div class="formmsg" id="formMsg"></div>
+      </div>
+
+      <!-- RIGHT: PROGRESS PRIBADI -->
+      <div>
+        <div class="panel">
+          <div class="panel-title">⭐ Progress Kamu</div>
+          <div class="panel-sub">Diitung dari nama yang kamu isi di form</div>
+          <div class="statgrid">
+            <div class="stat"><div class="val" id="statXp">-</div><div class="lbl">XP</div></div>
+            <div class="stat"><div class="val" id="statStreak">-</div><div class="lbl">Hari Beruntun</div></div>
+            <div class="stat"><div class="val" id="statTotal">-</div><div class="lbl">Total Check-in</div></div>
+          </div>
+          <div class="badge-row locked" id="badgeRow">
+            <div class="badge-icon">🏅</div>
+            <div class="badge-text"><b>No Silent Day</b><span>3 hari berturut tanpa blocker</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: HEAD DASHBOARD (dikunci PIN) -->
+  <div id="viewHead" style="display:none;">
+    <div class="panel" id="pinGate">
+      <div class="panel-title">🔒 Masuk sebagai Head</div>
+      <div class="panel-sub">Masukkan kode akses buat lihat dashboard tim</div>
+      <div class="pin-row">
+        <input type="text" id="pinInput" placeholder="Kode akses" maxlength="12">
+        <button class="submitbtn" id="pinSubmitBtn">Masuk</button>
+      </div>
+      <div class="formmsg" id="pinMsg"></div>
+    </div>
+
+    <div class="panel" id="headContent" style="display:none;">
+      <div class="dash-head">
+        <div class="panel-title">👥 Dashboard Tim</div>
+        <div class="btnrow">
+          <button class="refresh" id="refreshBtn">Refresh</button>
+          <button class="refresh" id="exportBtn">⬇ Export &amp; Reset</button>
+        </div>
+      </div>
+      <div class="panel-sub">Status semua orang yang pernah check-in</div>
+      <div id="teamList"><div class="empty">Memuat...</div></div>
+      <div class="note">Klik "Export & Reset" buat download semua data jadi file Excel, lalu SEMUA data check-in di Spreadsheet akan dikosongkan (akan diminta konfirmasi dulu, dan ini nggak bisa dibatalkan). Kode akses ini pemisah ringan, bukan keamanan penuh. Buat ganti kode, cari baris "HEAD_PIN" di bagian script paling atas file ini.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const state = { energy:null, blocker:null };
+  const HEAD_PIN = '2026'; // Head: ganti kode di sini kalau mau (juga jadi kode reset), lalu simpan ulang filenya
+
+  // WAJIB DIISI: tempel URL Apps Script kamu di sini setelah deploy (lihat instruksi dari Claude)
+  const API_URL = 'https://script.google.com/macros/s/AKfycbzFK4ztRIHFq3SqCxztJGca3EVC0XpTr1CEkJ5yUl8Gx0uIzy3MrGge8PDvnNOsLJYp/exec';
+
+  function switchTab(tab){
+    document.getElementById('viewCheckin').style.display = tab === 'checkin' ? '' : 'none';
+    document.getElementById('viewHead').style.display = tab === 'head' ? '' : 'none';
+    document.getElementById('tabBtnCheckin').classList.toggle('active', tab === 'checkin');
+    document.getElementById('tabBtnHead').classList.toggle('active', tab === 'head');
+  }
+  document.getElementById('tabBtnCheckin').addEventListener('click', ()=>switchTab('checkin'));
+  document.getElementById('tabBtnHead').addEventListener('click', ()=>switchTab('head'));
+
+  function checkPin(){
+    const val = document.getElementById('pinInput').value.trim();
+    const pinMsg = document.getElementById('pinMsg');
+    if(val === HEAD_PIN){
+      document.getElementById('pinGate').style.display = 'none';
+      document.getElementById('headContent').style.display = '';
+      refreshTeamDashboard();
+    }else{
+      pinMsg.className = 'formmsg err';
+      pinMsg.textContent = 'Kode salah, coba lagi.';
+    }
+  }
+  document.getElementById('pinSubmitBtn').addEventListener('click', checkPin);
+  document.getElementById('pinInput').addEventListener('keydown', e=>{
+    if(e.key === 'Enter') checkPin();
+  });
+
+  document.querySelectorAll('.opts').forEach(group=>{
+    group.addEventListener('click', e=>{
+      const opt = e.target.closest('.opt');
+      if(!opt) return;
+      const key = group.dataset.group;
+      group.querySelectorAll('.opt').forEach(o=>o.classList.remove('sel'));
+      opt.classList.add('sel');
+      state[key] = opt.dataset.value;
+    });
+  });
+
+  function todayStr(){
+    const d = new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function dateAddDays(dateStr, delta){
+    const d = new Date(dateStr+'T00:00:00');
+    d.setDate(d.getDate()+delta);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+
+  document.getElementById('todayLabel').textContent = new Date().toLocaleDateString('id-ID',{weekday:'long', day:'numeric', month:'long', year:'numeric'});
+
+  const fName = document.getElementById('fName');
+  const fDivisi = document.getElementById('fDivisi');
+  const fFocus = document.getElementById('fFocus');
+  const fCommit = document.getElementById('fCommit');
+  const submitBtn = document.getElementById('submitBtn');
+  const formMsg = document.getElementById('formMsg');
+
+  // ---- Komunikasi ke Google Sheets lewat Apps Script ----
+
+  async function apiPost(payload){
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error('Gagal menghubungi server (status '+res.status+')');
+    const data = await res.json();
+    if(!data.ok) throw new Error(data.error || 'Server menolak permintaan');
+    return data;
+  }
+
+  async function apiListAll(){
+    const res = await fetch(API_URL + '?action=list');
+    if(!res.ok) throw new Error('Gagal menghubungi server (status '+res.status+')');
+    const data = await res.json();
+    if(!data.ok) throw new Error(data.error || 'Server menolak permintaan');
+    return data.rows || [];
+  }
+
+  // Profil (nama & divisi) diinget lewat browser ini aja, biar nggak ngetik ulang
+  function loadProfile(){
+    try{
+      const raw = localStorage.getItem('dp_profile');
+      if(raw){
+        const p = JSON.parse(raw);
+        fName.value = p.name || '';
+        fDivisi.value = p.division || '';
+      }
+    }catch(e){ /* biarin kosong kalau gagal baca */ }
+  }
+  function saveProfile(name, division){
+    try{
+      localStorage.setItem('dp_profile', JSON.stringify({name, division}));
+    }catch(e){ /* nggak fatal kalau gagal simpan profil */ }
+  }
+
+  async function submitCheckin(){
+    const name = fName.value.trim();
+    const division = fDivisi.value.trim();
+    const focus = fFocus.value.trim();
+    const commit = fCommit.value.trim();
+
+    formMsg.className = 'formmsg';
+    formMsg.textContent = '';
+
+    if(API_URL.indexOf('PASTE_URL_APPS_SCRIPT') !== -1){
+      formMsg.className = 'formmsg err';
+      formMsg.textContent = 'Website ini belum disambungkan ke Google Sheets (API_URL belum diisi).';
+      return;
+    }
+    if(!name || !division){
+      formMsg.className = 'formmsg err';
+      formMsg.textContent = 'Nama dan divisi wajib diisi.';
+      return;
+    }
+    if(!state.energy){
+      formMsg.className = 'formmsg err';
+      formMsg.textContent = 'Pilih dulu jawaban untuk energi hari ini.';
+      return;
+    }
+    if(!state.blocker){
+      formMsg.className = 'formmsg err';
+      formMsg.textContent = 'Pilih dulu ada blocker atau tidak.';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Menyimpan...';
+
+    const date = todayStr();
+    const record = { action:'checkin', name, division, focus, commit, energy: state.energy, blocker: state.blocker, date };
+
+    try{
+      await apiPost(record);
+      saveProfile(name, division);
+      formMsg.className = 'formmsg ok';
+      formMsg.textContent = 'Check-in tersimpan. Makasih!';
+      await refreshMyStats(name);
+    }catch(e){
+      console.error(e);
+      formMsg.className = 'formmsg err';
+      formMsg.textContent = 'Gagal menyimpan: ' + e.message;
+    }finally{
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Check-in';
+    }
+  }
+
+  async function refreshMyStats(name){
+    if(!name) return;
+    let allRows;
+    try{
+      allRows = await apiListAll();
+    }catch(e){
+      console.error(e);
+      return;
+    }
+    const nameLower = name.trim().toLowerCase();
+    const logs = allRows
+      .filter(r => String(r.Nama||'').trim().toLowerCase() === nameLower)
+      .sort((a,b)=> a.Tanggal < b.Tanggal ? 1 : -1);
+
+    document.getElementById('statTotal').textContent = logs.length;
+    document.getElementById('statXp').textContent = logs.length * 10;
+
+    // hitung hari beruntun mundur dari hari ini
+    let streak = 0;
+    let cursor = todayStr();
+    const dateSet = new Set(logs.map(l=>l.Tanggal));
+    while(dateSet.has(cursor)){
+      streak++;
+      cursor = dateAddDays(cursor, -1);
+    }
+    document.getElementById('statStreak').textContent = streak;
+
+    // badge: 3 checkin terakhir tanpa blocker
+    const last3 = logs.slice(0,3);
+    const badgeUnlocked = last3.length === 3 && last3.every(l=>l.Blocker === 'none');
+    const badgeRow = document.getElementById('badgeRow');
+    badgeRow.classList.toggle('locked', !badgeUnlocked);
+  }
+
+  function statusFor(record){
+    const today = todayStr();
+    if(record.Tanggal !== today){
+      return {tone:'grey', label:'Belum check-in hari ini'};
+    }
+    if(record.Blocker === 'technical'){
+      return {tone:'red', label:'Ada kendala'};
+    }
+    if(record.Blocker === 'clarification' || record.Blocker === 'time' || record.Energi === 'tired' || record.Energi === 'stuck'){
+      return {tone:'amber', label:'Perlu follow-up'};
+    }
+    return {tone:'green', label:'Aktif'};
+  }
+
+  async function refreshTeamDashboard(){
+    const teamList = document.getElementById('teamList');
+    teamList.innerHTML = '<div class="empty">Memuat...</div>';
+    try{
+      const rows = await apiListAll();
+      if(rows.length === 0){
+        teamList.innerHTML = '<div class="empty">Belum ada yang check-in.</div>';
+        return;
+      }
+      const latestByName = {};
+      for(const rec of rows){
+        const key = String(rec.Nama||'').trim().toLowerCase();
+        if(!key) continue;
+        const prev = latestByName[key];
+        if(!prev || rec.Tanggal > prev.Tanggal || (rec.Tanggal === prev.Tanggal && new Date(rec.Timestamp) > new Date(prev.Timestamp))){
+          latestByName[key] = rec;
+        }
+      }
+      const members = Object.values(latestByName).sort((a,b)=> String(a.Nama).localeCompare(String(b.Nama)));
+      teamList.innerHTML = members.map(m=>{
+        const st = statusFor(m);
+        const dateLabel = m.Tanggal ? new Date(m.Tanggal+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric', month:'short'}) : '-';
+        return `<div class="member">
+          <div class="dot ${st.tone}"></div>
+          <div class="info">
+            <div class="name">${escapeHtml(m.Nama)}</div>
+            <div class="meta">${escapeHtml(m.Divisi)} · terakhir ${dateLabel}</div>
+          </div>
+          <div class="status">${st.label}</div>
+        </div>`;
+      }).join('');
+    }catch(e){
+      console.error(e);
+      teamList.innerHTML = '<div class="empty">Gagal memuat dashboard: '+escapeHtml(e.message)+'</div>';
+    }
+  }
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  }
+
+  function energyLabel(v){
+    return {energized:'Bertenaga', okay:'Baik-baik saja', tired:'Lelah', stuck:'Mentok'}[v] || v;
+  }
+  function blockerLabel(v){
+    return {none:'Tidak ada', clarification:'Butuh klarifikasi', time:'Butuh waktu', technical:'Kendala teknis'}[v] || v;
+  }
+
+  async function exportAndReset(){
+    const exportBtn = document.getElementById('exportBtn');
+    exportBtn.disabled = true;
+    exportBtn.textContent = 'Menyiapkan...';
+    try{
+      const rows = await apiListAll();
+      if(rows.length === 0){
+        alert('Belum ada data check-in buat di-export.');
+        return;
+      }
+
+      const excelRows = rows
+        .slice()
+        .sort((a,b)=> a.Tanggal < b.Tanggal ? 1 : (a.Tanggal > b.Tanggal ? -1 : String(a.Nama).localeCompare(String(b.Nama))))
+        .map(rec=>({
+          Nama: rec.Nama,
+          Divisi: rec.Divisi,
+          Tanggal: rec.Tanggal,
+          Energi: energyLabel(rec.Energi),
+          Fokus: rec.Fokus || '',
+          Blocker: blockerLabel(rec.Blocker),
+          Komitmen: rec.Komitmen || ''
+        }));
+
+      const ws = XLSX.utils.json_to_sheet(excelRows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Check-in');
+      const filename = 'daily-pulse-checkin-'+todayStr()+'.xlsx';
+      XLSX.writeFile(wb, filename);
+
+      // konfirmasi ganda sebelum hapus, karena aksi ini nggak bisa dibatalin
+      const sure = confirm('File Excel udah ke-download. Lanjut hapus SEMUA data check-in di Spreadsheet? Ini nggak bisa dibatalin.');
+      if(!sure){
+        exportBtn.textContent = '⬇ Export & Reset';
+        return;
+      }
+      const typed = prompt('Ketik HAPUS (huruf besar semua) buat konfirmasi terakhir:');
+      if(typed !== 'HAPUS'){
+        alert('Dibatalkan, data tidak dihapus.');
+        return;
+      }
+
+      await apiPost({ action:'reset', secret: HEAD_PIN });
+      alert('Data berhasil dihapus. Spreadsheet sudah kosong lagi.');
+      await refreshTeamDashboard();
+    }catch(e){
+      console.error(e);
+      alert('Gagal export/reset: ' + e.message);
+    }finally{
+      exportBtn.disabled = false;
+      exportBtn.textContent = '⬇ Export & Reset';
+    }
+  }
+
+  submitBtn.addEventListener('click', submitCheckin);
+  document.getElementById('refreshBtn').addEventListener('click', refreshTeamDashboard);
+  document.getElementById('exportBtn').addEventListener('click', exportAndReset);
+
+  fName.addEventListener('change', ()=>{
+    if(fName.value.trim()) refreshMyStats(fName.value.trim());
+  });
+
+  (function init(){
+    loadProfile();
+    if(fName.value.trim()){
+      refreshMyStats(fName.value.trim());
+    }
+  })();
+})();
+</script>
+</body>
+</html>
